@@ -1,0 +1,59 @@
+# Sample GitHub Actions workflow for this repo's config-as-code scripts.
+#
+# Copy this file to .github/workflows/apply-monitor-config.yml in your own
+# repo (or reference it from there) and adjust triggers/secrets as needed.
+#
+# Requires a self-hosted Windows runner with network access to your Monitor
+# base monitor - see ../README.md for why GitHub-hosted runners won't work
+# here (the PowerShell API is on-prem only).
+#
+# Required repo/environment secrets:
+#   RGM_SERVER_URL    e.g. https://sql-monitor.internal.example.com:8080
+#   RGM_ACCESS_TOKEN  generated in Monitor: Configuration -> API
+#
+# Optional:
+#   RGM_MODULE_PATH   only if the RedgateMonitor module isn't already
+#                      installed in a default PSModulePath location on the
+#                      runner
+
+name: Apply Redgate Monitor config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "config/monitor-config.yaml"
+  workflow_dispatch:
+    inputs:
+      whatIf:
+        description: "Dry run (-WhatIf) instead of applying"
+        type: boolean
+        default: true
+
+jobs:
+  apply:
+    runs-on: [self-hosted, windows, redgate-monitor]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
+            Install-Module powershell-yaml -Scope CurrentUser -Force -ErrorAction Stop
+          }
+
+      - name: Apply config
+        shell: pwsh
+        env:
+          RGM_SERVER_URL: ${{ secrets.RGM_SERVER_URL }}
+          RGM_ACCESS_TOKEN: ${{ secrets.RGM_ACCESS_TOKEN }}
+          RGM_MODULE_PATH: ${{ secrets.RGM_MODULE_PATH }}
+        run: |
+          $whatIf = '${{ inputs.whatIf }}' -ne 'false'
+          if ($whatIf) {
+            ./scripts/Apply-MonitorConfig.ps1 -ConfigFile ./config/monitor-config.yaml -WhatIf
+          } else {
+            ./scripts/Apply-MonitorConfig.ps1 -ConfigFile ./config/monitor-config.yaml
+          }

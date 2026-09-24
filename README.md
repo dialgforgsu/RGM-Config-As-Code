@@ -11,6 +11,7 @@ API.
 - `scripts/Connect-Monitor.ps1` — shared connection helper (imported by the other two scripts).
 - `scripts/Export-MonitorConfig.ps1` — pulls current state from Monitor and writes it to YAML.
 - `scripts/Apply-MonitorConfig.ps1` — reads the YAML and pushes it to Monitor.
+- `pipelines/` — sample CI/CD pipelines that run `Apply-MonitorConfig.ps1` automatically, one folder per platform (see [pipelines/README.md](pipelines/README.md)).
 
 ## One-time setup
 
