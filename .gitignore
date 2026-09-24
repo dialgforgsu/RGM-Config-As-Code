@@ -1,0 +1,3 @@
+# Real, org-specific config - never commit. Copy config/monitor-config.template.yaml
+# to this path and fill it in with your actual estate/alert/notification settings.
+config/monitor-config.yaml

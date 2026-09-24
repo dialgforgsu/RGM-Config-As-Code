@@ -1,0 +1,79 @@
+# Redgate Monitor configuration-as-code — TEMPLATE
+#
+# This is a generic starting point, safe to share/publish: no real
+# hostnames, credentials, or org-specific names.
+#
+# To use it:
+#   1. Copy this file to monitor-config.yaml (that file is gitignored -
+#      it's where your real, org-specific config lives).
+#   2. Either edit it by hand to describe the estate you want, or run
+#      ../scripts/Export-MonitorConfig.ps1 against a live instance to
+#      overwrite it with your actual current settings.
+#   3. Apply with ../scripts/Apply-MonitorConfig.ps1.
+#
+# Every value below is a placeholder - replace anything that looks like
+# <angle-brackets> or an example.com/example.org name before applying.
+
+connection:
+  # Real URL/token are never stored in this file - see
+  # scripts/Connect-Monitor.ps1, which reads these env vars instead.
+  serverUrlEnvVar: RGM_SERVER_URL
+  accessTokenEnvVar: RGM_ACCESS_TOKEN
+
+groups:
+  - name: <group-name>                 # e.g. Production
+    subGroups:
+      - name: <sub-group-name>         # e.g. Production - SQL Server
+
+estate:
+  # type maps to the New-RedgateMonitor* cmdlet used to build the monitored
+  # object. SqlServer and WindowsHost are shown here; see
+  # scripts/Apply-MonitorConfig.ps1 for which types are actually wired up.
+  - type: SqlServer
+    fullName: <instance-address>       # e.g. sql01 or sql01\INSTANCENAME
+    baseMonitor: <base-monitor-name>   # name/id of your Redgate Monitor base monitor
+    group: <sub-group-name>
+    alias: <short-alias>               # used elsewhere in this file to refer to this instance
+    sqlServerAuthenticationMode: Windows   # Windows | SqlServer
+    port: 1433
+    encryptConnection: Optional             # Optional | Mandatory | Strict
+    trustServerCertificate: false
+
+  - type: WindowsHost
+    fullName: <host-address>           # e.g. sql01
+    baseMonitor: <base-monitor-name>
+    group: <sub-group-name>
+
+alerts:
+  # One entry per (monitoredObject, alertType) override. Anything not
+  # listed here is left at its inherited/default setting.
+  - target: <short-alias>              # must match an alias under 'estate' above
+    alertType: DiskSpace
+    status: Enabled                    # Enabled | Disabled | Inherited
+    comment: "Managed via config-as-code"
+    specificSettings:
+      warningThresholdPercent: 15
+      errorThresholdPercent: 5
+
+  - target: <short-alias>
+    alertType: JobFailed
+    status: Enabled
+
+notifications:
+  - alertType: DiskSpace
+    target: <short-alias>
+    channels:
+      - type: Email
+        recipients:
+          - <team-alias>@example.org
+      - type: Webhook
+        url: https://hooks.example.org/monitor-alerts
+
+globalSettings:
+  accessRights:
+    - principal: <DOMAIN>\<group-name>
+      role: FullControl
+      scope: <group-name>
+  principals:
+    - name: <DOMAIN>\<group-name>
+      type: ActiveDirectoryGroup
