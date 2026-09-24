@@ -11,6 +11,8 @@ API.
 - `scripts/Connect-Monitor.ps1` — shared connection helper (imported by the other two scripts).
 - `scripts/Export-MonitorConfig.ps1` — pulls current state from Monitor and writes it to YAML.
 - `scripts/Apply-MonitorConfig.ps1` — reads the YAML and pushes it to Monitor.
+- `config/base-monitors/example-base-monitor.template.yaml` — template for splitting config into one file per base monitor at scale (see [Scaling to multiple base monitors](#scaling-to-multiple-base-monitors)).
+- `scripts/Apply-AllMonitorConfigs.ps1` — applies every real shard under `config/base-monitors/`.
 - `pipelines/` — sample CI/CD pipelines that run `Apply-MonitorConfig.ps1` automatically, one folder per platform (see [pipelines/README.md](pipelines/README.md)).
 
 ## One-time setup
@@ -50,6 +52,37 @@ Copy-Item config/monitor-config.template.yaml config/monitor-config.yaml
 ./scripts/Apply-MonitorConfig.ps1 -WhatIf
 ./scripts/Apply-MonitorConfig.ps1
 ```
+
+## Scaling to multiple base monitors
+
+One Monitor instance (one web interface/repository) can run several base
+monitors - typically one per region, data centre, or environment, to spread
+collection load or cross network boundaries. The PowerShell API always
+connects to the web interface, not to an individual base monitor, so this
+doesn't need a separate connection per base monitor - `estate` entries
+already name which `baseMonitor` they belong to (see the template).
+
+The thing that actually breaks down at scale is a single
+`monitor-config.yaml` growing to cover every base monitor's estate at once:
+big diffs, one team's PR touching everyone's alerts, awkward code review.
+Once that's a real problem (multiple base monitors, and/or different teams
+owning different parts of the estate), split the file instead:
+
+1. Copy `config/base-monitors/example-base-monitor.template.yaml` to
+   `config/base-monitors/<base-monitor-name>.yaml` once per base monitor
+   (real files are gitignored, same as `config/monitor-config.yaml`).
+2. Each shard only lists the groups/estate/alerts/notifications for that
+   base monitor's slice of the estate, and can scope `globalSettings.accessRights`
+   to that team's own group rather than repeating instance-wide rights
+   everywhere.
+3. Apply every shard in one pass with `./scripts/Apply-AllMonitorConfigs.ps1
+   -WhatIf`, or a single shard with `./scripts/Apply-MonitorConfig.ps1
+   -ConfigFile config/base-monitors/<name>.yaml -WhatIf`.
+
+If you genuinely run fully separate Monitor instances (isolated networks,
+not just multiple base monitors on one instance), give each shard its own
+`serverUrlEnvVar`/`accessTokenEnvVar` pair (e.g. `RGM_SERVER_URL_EU`) instead
+of reusing the same one across shards - the template calls this out inline.
 
 ## Known gaps to fill in before relying on this in production
 

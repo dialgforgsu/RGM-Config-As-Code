@@ -1,0 +1,100 @@
+# Redgate Monitor configuration-as-code — SHARDED TEMPLATE (one file per base monitor)
+#
+# Use this layout instead of the single config/monitor-config.yaml once one
+# file gets too big to review sensibly - typically when you're running
+# several base monitors (e.g. one per region/data-centre/environment) under
+# the same Monitor web interface, and/or different teams own different
+# parts of the estate.
+#
+# All base monitors under one Monitor instance share the same web
+# interface/repository, so they still share ONE connection (one
+# serverUrl/token) - the PowerShell API talks to the web interface, not to
+# an individual base monitor. Sharding here is purely about keeping each
+# file small and giving each base monitor/team its own file to own and
+# review, not about connecting to multiple Monitor instances. If you
+# genuinely do run separate Monitor instances (e.g. fully isolated
+# networks), give each shard its own serverUrlEnvVar/accessTokenEnvVar
+# pointing at a differently-named pair of env vars, e.g. RGM_SERVER_URL_EU /
+# RGM_ACCESS_TOKEN_EU, and set those before running Apply-MonitorConfig.ps1
+# against that shard.
+#
+# To use it:
+#   1. Copy this file to config/base-monitors/<base-monitor-name>.yaml for
+#      each base monitor you want to manage (e.g. eu-prod.yaml, us-prod.yaml).
+#      Real per-shard files are gitignored - see config/base-monitors/.gitignore.
+#   2. Fill in the groups/estate/alerts/notifications for that base
+#      monitor's slice of the estate only.
+#   3. Apply every shard in one go with
+#      ../../scripts/Apply-AllMonitorConfigs.ps1, or a single shard with
+#      ../../scripts/Apply-MonitorConfig.ps1 -ConfigFile <this file>.
+#
+# Every value below is a placeholder - replace anything that looks like
+# <angle-brackets> or an example.com/example.org name before applying.
+
+connection:
+  # Same Monitor instance as every other shard - reuse the same env vars
+  # unless this base monitor genuinely lives behind a separate Monitor
+  # instance (see note above).
+  serverUrlEnvVar: RGM_SERVER_URL
+  accessTokenEnvVar: RGM_ACCESS_TOKEN
+
+groups:
+  - name: <group-name>                 # e.g. EU Production
+    subGroups:
+      - name: <sub-group-name>         # e.g. EU Production - SQL Server
+
+estate:
+  # type maps to the New-RedgateMonitor* cmdlet used to build the monitored
+  # object. SqlServer and WindowsHost are shown here; see
+  # scripts/Apply-MonitorConfig.ps1 for which types are actually wired up.
+  - type: SqlServer
+    fullName: <instance-address>       # e.g. sql-eu-01 or sql-eu-01\INSTANCENAME
+    baseMonitor: <base-monitor-name>   # this shard's base monitor - every entry below should use the same one
+    group: <sub-group-name>
+    alias: <short-alias>               # used elsewhere in this file to refer to this instance
+    sqlServerAuthenticationMode: Windows   # Windows | SqlServer
+    port: 1433
+    encryptConnection: Optional             # Optional | Mandatory | Strict
+    trustServerCertificate: false
+
+  - type: WindowsHost
+    fullName: <host-address>           # e.g. sql-eu-01
+    baseMonitor: <base-monitor-name>
+    group: <sub-group-name>
+
+alerts:
+  # One entry per (monitoredObject, alertType) override. Anything not
+  # listed here is left at its inherited/default setting.
+  - target: <short-alias>              # must match an alias under 'estate' above
+    alertType: DiskSpace
+    status: Enabled                    # Enabled | Disabled | Inherited
+    comment: "Managed via config-as-code"
+    specificSettings:
+      warningThresholdPercent: 15
+      errorThresholdPercent: 5
+
+  - target: <short-alias>
+    alertType: JobFailed
+    status: Enabled
+
+notifications:
+  - alertType: DiskSpace
+    target: <short-alias>
+    channels:
+      - type: Email
+        recipients:
+          - <team-alias>@example.org
+      - type: Webhook
+        url: https://hooks.example.org/monitor-alerts
+
+globalSettings:
+  # Scope access to this base monitor's own group(s) so each team only
+  # manages rights over the estate they own, rather than repeating
+  # instance-wide access rights in every shard.
+  accessRights:
+    - principal: <DOMAIN>\<group-name>
+      role: FullControl
+      scope: <group-name>
+  principals:
+    - name: <DOMAIN>\<group-name>
+      type: ActiveDirectoryGroup

@@ -1,3 +1,8 @@
 # Real, org-specific config - never commit. Copy config/monitor-config.template.yaml
 # to this path and fill it in with your actual estate/alert/notification settings.
 config/monitor-config.yaml
+
+# Same for sharded per-base-monitor configs - real shards are org-specific,
+# only the *.template.yaml example is committed.
+config/base-monitors/*.yaml
+!config/base-monitors/*.template.yaml
