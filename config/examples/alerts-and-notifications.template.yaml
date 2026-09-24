@@ -1,0 +1,139 @@
+# Redgate Monitor configuration-as-code — ALERTS & NOTIFICATIONS COOKBOOK
+#
+# Not a standalone config file - this is a copy-from-here reference. Lift
+# whichever `alerts:`/`notifications:` entries below match your situation
+# into config/monitor-config.yaml (or a config/base-monitors/<name>.yaml
+# shard) under its existing alerts/notifications sections.
+#
+# `target` must match an `alias` you've already defined under that file's
+# `estate:` section - these examples use illustrative aliases
+# (<sql-alias>, <windows-host-alias>, ...), not real ones.
+#
+# specificSettings field names vary by alertType and by Monitor version -
+# confirm them against Configuration -> API -> Example scripts in your own
+# instance, or the PowerShell cmdlet reference, before relying on any of
+# the values below. Apply with -WhatIf first.
+
+# ---------------------------------------------------------------------------
+# ALERTS
+# ---------------------------------------------------------------------------
+#
+# A sane starting alert set (see README.md for the tuning process this
+# assumes - notifications off, let alerts accumulate, tune structurally,
+# then turn notifications on):
+
+alerts:
+  # --- Availability ----------------------------------------------------
+  - target: <windows-host-alias>
+    alertType: MachineUnreachable
+    status: Enabled
+
+  - target: <sql-alias>
+    alertType: InstanceUnreachable
+    status: Enabled
+
+  # --- Capacity: configure per drive, not per server --------------------
+  # Low disk space is the most commonly muted alert because one
+  # percentage threshold doesn't fit drives of very different sizes.
+  # Override per drive/server/group rather than disabling it outright.
+  - target: <windows-host-alias>
+    alertType: DiskSpace
+    status: Enabled
+    comment: "Managed via config-as-code - tuned per drive, see README"
+    specificSettings:
+      warningThresholdPercent: 15
+      errorThresholdPercent: 5
+
+  # --- Jobs: the single most common source of noise ----------------------
+  # Segment by workload/group so thresholds differ, and raise the minimum
+  # runtime so trivially short jobs stop qualifying, before muting this.
+  - target: <sql-alias>
+    alertType: JobFailed
+    status: Enabled
+
+  - target: <sql-alias>
+    alertType: JobDurationOutsideNormalRange
+    status: Enabled
+    comment: "Tuned per group - variable jobs (backups, index maint.) excluded by name"
+
+  # --- Data protection ----------------------------------------------------
+  - target: <sql-alias>
+    alertType: DatabaseNotBackedUp
+    status: Enabled
+
+  - target: <sql-alias>
+    alertType: TransactionLogNotBackedUp
+    status: Enabled
+
+  # --- Contention: pair with severity escalation by duration --------------
+  # Escalating severity by duration (configured per alert type in Monitor,
+  # not shown as a YAML field here - see the cmdlet reference for the
+  # current parameter) is what lets one alert type distinguish "briefly
+  # busy" from "actually stuck" instead of a single cliff-edge threshold.
+  - target: <sql-alias>
+    alertType: LongRunningQuery
+    status: Enabled
+    comment: "Known long-running/reporting work excluded by name pattern"
+
+  - target: <sql-alias>
+    alertType: Deadlock
+    status: Enabled
+
+  - target: <sql-alias>
+    alertType: BlockingProcess
+    status: Enabled
+
+  # --- A noisy built-in disabled deliberately, and why ---------------------
+  # The integrity-check collector needs elevated rights and sits in
+  # permanent error under a least-privilege monitoring account - disable
+  # it on purpose rather than escalating the account or leaving it broken.
+  - target: <sql-alias>
+    alertType: IntegrityCheckOverdue
+    status: Disabled
+    comment: "Disabled deliberately - requires elevated rights not granted to the monitoring account"
+
+# ---------------------------------------------------------------------------
+# NOTIFICATIONS
+# ---------------------------------------------------------------------------
+#
+# Channel shapes below match what Apply-MonitorConfig.ps1 currently passes
+# straight through to Update-RedgateMonitorAlertNotificationSettings. One
+# alert can't fan out to more than one webhook destination at once - if you
+# need chat + paging + ITSM simultaneously, use a native channel for one of
+# them (e.g. Teams) and a single webhook for the rest, or fan out on your
+# receiving end.
+
+notifications:
+  # --- Team distribution list by email ------------------------------------
+  - alertType: DiskSpace
+    target: <windows-host-alias>
+    channels:
+      - type: Email
+        recipients:
+          - <team-alias>@example.org
+
+  # --- Escalation-worthy alert paged via a generic webhook -----------------
+  # Works for PagerDuty, Opsgenie, or any consumer that accepts a custom
+  # message template. alertDetailText (the triggering value/threshold) is
+  # available to the template from Monitor 14.28.0.
+  - alertType: JobFailed
+    target: <sql-alias>
+    channels:
+      - type: Webhook
+        url: https://hooks.example.org/monitor-alerts
+        # headers with secrets (e.g. Authorization bearer tokens) are
+        # masked in Monitor's own settings/logs from 14.27.0/14.28.0, but
+        # still don't commit real values here - use a secret store and
+        # keep only a placeholder in git.
+
+  # --- Multiple channels for the same alert on the same target -------------
+  # Fine as long as it isn't two webhooks for the one alert (see the
+  # fan-out limit above).
+  - alertType: MachineUnreachable
+    target: <windows-host-alias>
+    channels:
+      - type: Email
+        recipients:
+          - <team-alias>@example.org
+      - type: Webhook
+        url: https://hooks.example.org/monitor-alerts

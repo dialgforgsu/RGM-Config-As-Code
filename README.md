@@ -12,6 +12,7 @@ API.
 - `scripts/Export-MonitorConfig.ps1` — pulls current state from Monitor and writes it to YAML.
 - `scripts/Apply-MonitorConfig.ps1` — reads the YAML and pushes it to Monitor.
 - `config/base-monitors/example-base-monitor.template.yaml` — template for splitting config into one file per base monitor at scale (see [Scaling to multiple base monitors](#scaling-to-multiple-base-monitors)).
+- `config/examples/alerts-and-notifications.template.yaml` — a cookbook of common alert/notification patterns to copy into your own config (not a standalone file to apply on its own).
 - `scripts/Apply-AllMonitorConfigs.ps1` — applies every real shard under `config/base-monitors/`.
 - `pipelines/` — sample CI/CD pipelines that run `Apply-MonitorConfig.ps1` automatically, one folder per platform (see [pipelines/README.md](pipelines/README.md)).
 
